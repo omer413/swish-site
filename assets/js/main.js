@@ -59,12 +59,11 @@
   const heroLines = document.querySelectorAll('.hero__title > span > span');
   const intro = gsap.timeline({ defaults: { ease: 'expo.out' } });
   gsap.set(heroLines, { yPercent: 110 });
-  gsap.set('[data-hero-panel]', { clipPath: 'inset(12% 8% 0% 8% round 24px)' });
   intro
     .to('.curtain__logo', { yPercent: -40, opacity: 0, duration: .6, ease: 'power3.in' }, .35)
     .to(curtain, { clipPath: 'inset(0 0 100% 0)', duration: 1.1, ease: 'expo.inOut' }, .55)
     .set(curtain, { display: 'none' })
-    .to('[data-hero-panel]', { clipPath: 'inset(0% 0% 0% 0% round 24px)', duration: 1.6 }, 1.0)
+    .from('.hero__scene', { scale: 1.12, duration: 2, ease: 'expo.out' }, .9)
     .to(heroLines, { yPercent: 0, duration: 1.3, stagger: .09 }, 1.05)
     .to('.hero [data-reveal]', { opacity: 1, y: 0, duration: 1.1, stagger: .1 }, 1.25)
     .from('.header__inner > *', { y: -20, opacity: 0, duration: 1, stagger: .08 }, 1.2)
@@ -122,36 +121,93 @@
     });
   });
 
-  /* ---------- hero: stat reel + scroll parallax ---------- */
-  const rows = document.querySelectorAll('[data-reel-row]');
-  rows.forEach(row => {
-    const dir = Number(row.dataset.reelRow);
-    const span = row.querySelector('span');
-    row.appendChild(span.cloneNode(true));
-    const w = () => span.offsetWidth;
-    gsap.fromTo(row, { x: dir > 0 ? () => -w() : 0 }, { x: dir > 0 ? 0 : () => -w(), duration: 38, ease: 'none', repeat: -1 });
-  });
-
-  // cycle between the reel and an image scene, like a showreel cut
-  const scene = document.querySelector('.hero__scene');
-  if (scene && !reduceMotion) {
-    // stats play first, then hand over to the showreel video
-    gsap.timeline({ delay: 3.6 })
-      .to(scene, { opacity: 1, scale: 1, duration: 1.4, ease: 'expo.out' })
-      .to('.hero__reel', { opacity: 0, duration: .7 }, 0);
-  }
+  /* ---------- hero: stepped card outline + video parallax ---------- */
+  const card = document.querySelector('.hero__card');
+  const shape = card?.querySelector('.hero__shape');
+  const textRight = (el) => {
+    const r = document.createRange(); r.selectNodeContents(el);
+    return r.getBoundingClientRect().right;
+  };
+  const drawHeroShape = () => {
+    if (!shape) return;
+    shape.innerHTML = '';
+    if (window.innerWidth <= 960) return;
+    const box = card.getBoundingClientRect();
+    // vertical positions come from layout offsets so the intro's slide-in transforms don't skew them
+    const vbox = (el) => {
+      let top = 0, n = el;
+      while (n && n !== card) { top += n.offsetTop; n = n.offsetParent; }
+      return { top, bottom: top + el.offsetHeight };
+    };
+    const lines = [...card.querySelectorAll('.hero__title > span')];
+    const eyebrow = card.querySelector('.eyebrow');
+    const actions = card.querySelector('.hero__actions');
+    const lastAction = actions.lastElementChild;
+    const hr = parseFloat(getComputedStyle(document.querySelector('.hero')).getPropertyValue('--hr')) || 20;
+    // rows of the white shape: [eyebrow + line 1], line 2, line 3, buttons
+    const rows = [
+      { first: eyebrow, last: lines[0], right: Math.max(textRight(eyebrow), textRight(lines[0].firstElementChild)) },
+      { first: lines[1], last: lines[1], right: textRight(lines[1].firstElementChild) },
+      { first: lines[2], last: lines[2], right: textRight(lines[2].firstElementChild) },
+      { first: actions, last: actions, right: lastAction.getBoundingClientRect().right - (parseFloat(gsap.getProperty(lastAction, 'x')) || 0) },
+    ];
+    const pad = parseFloat(getComputedStyle(card).paddingLeft);
+    const padR = Math.max(24, window.innerWidth * .018);
+    let top = 0;
+    rows.forEach((row, i) => {
+      const bottom = i === rows.length - 1 ? card.offsetHeight
+        : Math.round((vbox(row.last).bottom + vbox(rows[i + 1].first).top) / 2);
+      row.top = top; row.bottom = bottom;
+      row.left = i === 0 ? 0 : pad - Math.max(20, pad * .14);
+      row.width = row.right - box.left + padR - row.left;
+      // snap near-equal edges together so small differences don't leave slivers
+      if (i > 0) {
+        const prevRight = rows[i - 1].left + rows[i - 1].width;
+        if (Math.abs(row.left + row.width - prevRight) < hr * 2) row.width = prevRight - row.left;
+      }
+      top = bottom;
+    });
+    // a concave join: a small square whose white quarter fills the corner named by `at`
+    const corner = (x, y, at) => {
+      const c = document.createElement('b');
+      c.style.left = x + 'px'; c.style.top = y + 'px'; c.dataset.at = at;
+      shape.appendChild(c);
+    };
+    rows.forEach((row, i) => {
+      const el = document.createElement('i');
+      const right = row.left + row.width;
+      Object.assign(el.style, { top: row.top + 'px', left: row.left + 'px', width: row.width + 'px', height: (row.bottom - row.top) + 'px' });
+      let tr = 0, br = 0, bl = 0;
+      if (i === 0) {
+        corner(right, 0, 'tl');                 // where the card meets the panel's top edge
+        corner(0, row.bottom, 'tl');            // panel's corner below the first row, on the left
+      }
+      if (i === 1) corner(row.left - hr, row.top, 'tr'); // step in on the left side
+      const prev = rows[i - 1], next = rows[i + 1];
+      if (prev) {
+        const prevRight = prev.left + prev.width;
+        if (right > prevRight + 1) tr = hr;
+        else if (right < prevRight - 1) corner(right, row.top, 'tl');
+      }
+      if (next) {
+        const nextRight = next.left + next.width;
+        if (nextRight < right - 1) br = hr;
+        else if (nextRight > right + 1) corner(right, row.bottom - hr, 'bl');
+      } else { br = hr; bl = hr; }
+      el.style.borderRadius = `0 ${tr}px ${br}px ${bl}px`;
+      shape.appendChild(el);
+    });
+  };
+  drawHeroShape();
+  document.fonts?.ready.then(drawHeroShape);
+  setTimeout(drawHeroShape, 3200);
+  window.addEventListener('resize', drawHeroShape);
 
   const mm = gsap.matchMedia();
-  mm.add('(min-width: 961px)', () => {
-    gsap.to('[data-hero-panel]', {
-      scale: .94, borderRadius: 32, ease: 'none',
-      scrollTrigger: { trigger: '[data-hero]', start: 'top top', end: 'bottom top', scrub: true }
-    });
-    gsap.to('.hero__card', {
-      y: -80, ease: 'none',
-      scrollTrigger: { trigger: '[data-hero]', start: 'top top', end: 'bottom top', scrub: true }
-    });
-  });
+  const heroVideo = document.querySelector('.hero__scene video, .hero__scene img');
+  if (heroVideo && !reduceMotion) {
+    gsap.fromTo(heroVideo, { yPercent: -6 }, { yPercent: 4, ease: 'none', scrollTrigger: { trigger: '[data-hero]', start: 'top top', end: 'bottom top', scrub: true } });
+  }
 
   /* ---------- word-by-word scrub (intro + story) ---------- */
   document.querySelectorAll('[data-scrub-words]').forEach(el => {
