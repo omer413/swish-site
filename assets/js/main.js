@@ -67,7 +67,7 @@
     .to(heroLines, { yPercent: 0, duration: 1.3, stagger: .09 }, 1.05)
     .to('.hero [data-reveal]', { opacity: 1, y: 0, duration: 1.1, stagger: .1 }, 1.25)
     .from('.header__inner > *', { y: -20, opacity: 0, duration: 1, stagger: .08 }, 1.2)
-    .from('.hear, .sticker', { y: 30, opacity: 0, duration: 1, stagger: .1 }, 1.6);
+    .from('.sticker', { y: 30, opacity: 0, duration: 1, stagger: .1 }, 1.6);
 
   /* ---------- header: floating pill on scroll, hide on scroll down ---------- */
   const header = document.querySelector('[data-header]');
@@ -262,12 +262,6 @@
       onToggle: self => { if (self.isActive) services.forEach((o, j) => o.classList.toggle('is-active', i === j)); }
     });
     gsap.from(s.querySelector('.service__name'), { yPercent: 60, opacity: 0, duration: 1.2, ease: 'expo.out', scrollTrigger: { trigger: s, start: 'top 92%' } });
-  });
-  // the floating "hear from" pill swaps sides over the dark section, as in the reference recording
-  const hear = document.querySelector('[data-hear]');
-  ScrollTrigger.create({
-    trigger: '.expertise', start: 'top 60%', end: 'bottom 40%',
-    onToggle: self => hear?.classList.toggle('is-left', self.isActive)
   });
 
   /* ---------- testimonial parallax + scale-in ---------- */
